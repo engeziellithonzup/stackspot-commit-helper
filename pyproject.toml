@@ -20,5 +20,8 @@ dependencies = [
     "stackspot",  
 ]
 
+homepage = "https://github.com/engeziellithonzup"
+repository = "https://github.com/engeziellithonzup/stackspot-commit-helper"
+
 [project.scripts]
 scommit = "stackspot_commit.cli:main"
