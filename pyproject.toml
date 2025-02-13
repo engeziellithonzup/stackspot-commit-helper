@@ -7,7 +7,7 @@ name = "stackspot-commit-helper"
 version = "0.1.7"
 description = "Auto-commit tool integrated with Stackspot AI"
 authors = [{ name="Engeziellithon vieira", email="engeziellithonvieira@gmail.com" },]
-url="https://github.com/engeziellithonzup/stackspot-commit-helper"
+urls = { "Github page" = "https://github.com/engeziellithonzup/stackspot-commit-helper" }
 readme = "README.md"
 license = {text = "MIT"}
 keywords = ["git", "commit", "stackspot", "ai"]
