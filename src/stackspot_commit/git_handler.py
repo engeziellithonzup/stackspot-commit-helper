@@ -21,11 +21,26 @@ class GitHandler:
             sys.exit(1)
 
     def get_diff(self) -> str:
-        """Gets the unstaged changes in the repository."""
+        """Gets the unstaged changes in the repository, including untracked files."""
         try:
-            diff = subprocess.check_output(["git", "diff"]).decode("utf-8")
-            logger.debug("Git diff retrieved successfully.")
-            return diff
+            diff_tracked = subprocess.check_output(["git", "diff"]).decode("utf-8")
+
+            untracked_files = subprocess.check_output(
+                ["git", "ls-files", "--others", "--exclude-standard"]
+            ).decode("utf-8").strip().split("\n")
+            
+            diff_untracked = ""
+            for file in untracked_files:
+                if file:  
+                    try:
+                        file_diff = subprocess.check_output(["git", "diff", "--no-index", "/dev/null", file]).decode("utf-8")
+                        diff_untracked += f"\n\nDiff for untracked file {file}:\n{file_diff}"
+                    except subprocess.CalledProcessError:
+                        logger.warning(f"Could not get diff for untracked file: {file}")
+            
+            full_diff = diff_tracked + diff_untracked
+            logger.debug("Git diff (including untracked files) retrieved successfully.")
+            return full_diff
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to get git diff: {e}")
             sys.exit(1)

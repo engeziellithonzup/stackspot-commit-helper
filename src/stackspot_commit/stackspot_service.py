@@ -23,17 +23,28 @@ class StackspotService:
 
     def generate_commit_message(self, diff: str) -> str:
         try:
+
             execution_id = Stackspot.instance().ai.quick_command.create_execution(
                 self.config.quick_command,
                 diff
             )
-            logger.info(f"Execution started with ID: {execution_id}")
+      
+            previous_status = None
+
+            def on_callback_response(e):
+                nonlocal previous_status
+                current_status = e['progress']['status']
+                if current_status != previous_status:
+
+                    previous_status = current_status
+
+                    logger.info(f"🔄 Execution quick command status: {current_status}")
 
             execution = Stackspot.instance().ai.quick_command.poll_execution(
                 execution_id,
                 { 
                     'delay': 0.5, 
-                    'on_callback_response': lambda e: logger.info(f"Execution quick command status: {e['progress']['status']}")
+                    'on_callback_response': on_callback_response
                 }
             )
             
@@ -42,7 +53,7 @@ class StackspotService:
                 logger.error(f"Execution failed: {error_message}")
                 raise Exception(f"Execution failed: {error_message}")
             
-            logger.info(f"Execution successful with status: {execution['progress']['status']}")
+            logger.info(f"✅ Execution successful")
             return self.commit_gen.extract_code_block(execution['result'])
 
         except Exception as e:
