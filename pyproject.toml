@@ -20,6 +20,7 @@ dependencies = [
     "stackspot",  
 ]
 
+[project.urls]
 homepage = "https://github.com/engeziellithonzup"
 repository = "https://github.com/engeziellithonzup/stackspot-commit-helper"
 
