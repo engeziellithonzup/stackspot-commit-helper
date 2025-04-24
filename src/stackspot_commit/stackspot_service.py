@@ -54,8 +54,12 @@ class StackspotService:
                 raise Exception(f"Execution failed: {error_message}")
             
             logger.info(f"✅ Execution successful")
-            return self.commit_gen.extract_code_block(execution['result'])
-
+            if len(execution.get("steps", [])) == 1:
+                answer = execution["steps"][0]["step_result"]["answer"]
+            else:
+                answer = self.commit_gen.extract_code_block(execution["result"]) 
+                
+            return answer 
         except Exception as e:
             logger.error(f"StackSpot API error: {e}")
             sys.exit(1)
