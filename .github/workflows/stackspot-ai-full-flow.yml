@@ -10,6 +10,8 @@ jobs:
   stackspot-ai-review:
     name: STK_${{ matrix.params.comment-title }}
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
