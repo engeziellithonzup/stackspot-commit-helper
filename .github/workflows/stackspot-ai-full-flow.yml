@@ -1,0 +1,104 @@
+name: StackSpot AI Full Flow (API Direct)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - 'develop'
+
+jobs:
+  stackspot-ai-review:
+    name: STK_${{ matrix.params.comment-title }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        params:
+          - rqc-slug: "qcr-sumarizador-mudancas-pr"
+            comment-title: "Sumário de Mudanças Delta"
+            prompt: "Gere um sumário executivo e conciso das mudanças técnicas contidas no diff abaixo:"
+          - rqc-slug: "w3-wcag-reviewer-rmt"
+            comment-title: "Analise WCAG - Acessibilidade"
+            prompt: "Realize uma auditoria de acessibilidade (padrão WCAG) com foco em arquivos de interface (XML/HTML) no diff abaixo:"
+          - rqc-slug: "qcr-code-review-java-resumido"
+            comment-title: "Code Review IA - Java"
+            prompt: "Realize um code review rigoroso seguindo princípios Clean Code, SOLID e boas práticas de Java para o seguinte diff:"
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Access Token
+        id: auth
+        env:
+          STK_CLIENT_ID: ${{ secrets.STK_CLIENT_ID }}
+          STK_CLIENT_SECRET: ${{ secrets.STK_CLIENT_SECRET }}
+          STK_REALM: ${{ secrets.STK_REALM }}
+        run: |
+          TOKEN=$(curl -s -X POST "https://idm.stackspot.com/realms/${STK_REALM}/protocol/openid-connect/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials" \
+            -d "client_id=${STK_CLIENT_ID}" \
+            -d "client_secret=${STK_CLIENT_SECRET}" | jq -r .access_token)
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Prepare PR Diff
+        id: diff
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD > pr_diff.txt
+
+      - name: Execute StackSpot AI Dynamic Agent
+        id: stk_run
+        env:
+          TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          PROMPT_RAW="${{ matrix.params.prompt }}"
+          DIFF_CONTENT=$(cat pr_diff.txt)
+          
+          # Step 1: Get Agent ID by Name
+          echo "Consultando ID do agente: ${{ matrix.params.rqc-slug }}"
+          AGENT_ID=$(curl -s -X GET "https://genai-agent-tools-api.stackspot.com/v3/agents?name=${{ matrix.params.rqc-slug }}" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" | jq -r '.items[0].id')
+          
+          if [ "$AGENT_ID" == "null" ] || [ -z "$AGENT_ID" ]; then
+            echo "Erro: Não foi possível encontrar o ID para o agente ${{ matrix.params.rqc-slug }}"
+            exit 1
+          fi
+          
+          echo "Agent ID encontrado: $AGENT_ID"
+          
+          # Step 2: Execute Chat Command
+          # Escaping prompt and diff for JSON
+          JSON_PROMPT=$(echo "${PROMPT_RAW}\n\n${DIFF_CONTENT}" | jq -Rsa .)
+          
+          RESPONSE=$(curl -s -X POST "https://genai-inference-app.stackspot.com/v1/agent/${AGENT_ID}/chat" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+                  \"streaming\": false,
+                  \"user_prompt\": ${JSON_PROMPT},
+                  \"stackspot_knowledge\": true,
+                  \"return_ks_in_response\": true
+                }")
+          
+          # Extract comment output (Based on the actual response format provided: .message)
+          COMMENT=$(echo $RESPONSE | jq -r '.message // .answer // .result // .output // "Erro ao extrair resposta do chat."')
+          
+          echo "comment<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post PR Comment
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          message: |
+            ### 🤖 ${{ matrix.params.comment-title }}
+            ${{ steps.stk_run.outputs.comment }}
+          comment_tag: ${{ matrix.params.rqc-slug }}
+
+      - name: Cleanup
+        if: always()
+        run: rm -f pr_diff.txt
